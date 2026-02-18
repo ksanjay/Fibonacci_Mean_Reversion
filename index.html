@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fibonacci Mean Reversion Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f1115;
+            color: #e2e8f0;
+        }
+        
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .signal-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+                    <span class="text-blue-500">Fib</span>Revert
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Mean Reversion Strategy & Fibonacci Analytics</p>
+            </div>
+            
+            <div class="flex gap-2 w-full md:w-auto">
+                <div class="relative flex-grow md:flex-grow-0">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500"></i>
+                    <input type="text" id="tickerInput" placeholder="Enter Ticker (e.g. AMZN)" 
+                        class="w-full md:w-64 bg-slate-800 border border-slate-700 text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono placeholder-slate-500 transition-all">
+                </div>
+                <button onclick="analyzeStock()" 
+                    class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold transition-colors shadow-lg shadow-blue-900/20">
+                    Analyze
+                </button>
+            </div>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Main Chart Area -->
+            <div class="lg:col-span-2 glass-panel rounded-2xl p-1 relative min-h-[400px]">
+                 <div class="absolute top-4 left-4 z-10">
+                    <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <span id="displayTicker" class="text-blue-400">AMZN</span> Price Action
+                    </h2>
+                </div>
+                <div class="h-full w-full p-2 pt-12">
+                    <canvas id="strategyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Side Panel: Stats & Signal -->
+            <div class="space-y-6">
+                
+                <!-- Strategy Signal Card -->
+                <div class="glass-panel rounded-2xl p-6 border-t-4 border-t-slate-600" id="signalCard">
+                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Strategy Signal</h3>
+                    <div class="flex items-center justify-between">
+                        <span id="signalText" class="text-4xl font-black text-white">WAIT</span>
+                        <div id="signalIcon" class="text-3xl text-slate-500">
+                            <i class="fa-solid fa-hourglass"></i>
+                        </div>
+                    </div>
+                    <p id="signalReason" class="text-sm text-slate-400 mt-2 leading-relaxed">
+                        Enter a ticker to generate analysis.
+                    </p>
+                </div>
+
+                <!-- Price Stats -->
+                <div class="glass-panel rounded-2xl p-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase font-bold">Current Price</p>
+                            <p id="currentPrice" class="text-xl font-mono text-white mt-1">---</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase font-bold">52W High</p>
+                            <p id="highPrice" class="text-xl font-mono text-emerald-400 mt-1">---</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase font-bold">52W Low</p>
+                            <p id="lowPrice" class="text-xl font-mono text-rose-400 mt-1">---</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase font-bold">Volatility</p>
+                            <p id="volatility" class="text-xl font-mono text-blue-400 mt-1">---</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fibonacci Levels Table -->
+                <div class="glass-panel rounded-2xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-700 bg-slate-800/50">
+                        <h3 class="font-semibold text-white text-sm">Fibonacci Levels</h3>
+                    </div>
+                    <div class="p-0">
+                        <table class="w-full text-sm text-left">
+                            <tbody id="fibTableBody" class="divide-y divide-slate-700/50">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        
+        <div class="glass-panel rounded-xl p-4 text-xs text-slate-500 flex items-start gap-3 mt-8">
+            <i class="fa-solid fa-circle-info mt-0.5 text-blue-500"></i>
+            <p>
+                <strong>Simulation Mode:</strong> Due to browser security restrictions on direct API access, this tool generates realistic market data patterns to demonstrate the Mean Reversion strategy. 
+                <br>
+                <strong>Logic:</strong> The system identifies the 52-week range, calculates Fibonacci retracements, and triggers signals when price deviates significantly from the 50% median line (Mean Reversion).
+            </p>
+        </div>
+
+    </div>
+
+<script>
+    let myChart = null;
+
+    // --- 1. Simulation Data Generator ---
+    // Generates a random walk series that resembles stock price movement
+    function generateStockData(startPrice, days, volatility) {
+        let prices = [startPrice];
+        let currentPrice = startPrice;
+        let trend = (Math.random() - 0.5) * 0.02; // Slight bias for trend
+
+        for (let i = 1; i < days; i++) {
+            // Random walk with drift
+            let change = currentPrice * (trend + (Math.random() - 0.5) * volatility);
+            currentPrice += change;
+            if(currentPrice < 1) currentPrice = 1; // Prevent negative prices
+            prices.push(currentPrice);
+            
+            // Occasionally change trend direction
+            if (i % 30 === 0) trend = (Math.random() - 0.5) * 0.02;
+        }
+        return prices;
+    }
+
+    // --- 2. Fibonacci Logic ---
+    function calculateFibLevels(high, low) {
+        const diff = high - low;
+        return {
+            '0.0%': low,
+            '23.6%': low + (diff * 0.236),
+            '38.2%': low + (diff * 0.382),
+            '50.0%': low + (diff * 0.5),
+            '61.8%': low + (diff * 0.618),
+            '78.6%': low + (diff * 0.786),
+            '100.0%': high
+        };
+    }
+
+    // --- 3. Main Analysis Function ---
+    function analyzeStock() {
+        const ticker = document.getElementById('tickerInput').value.toUpperCase() || "AMZN";
+        document.getElementById('displayTicker').innerText = ticker;
+        
+        // Simulate data fetching
+        const volatility = 0.025; // 2.5% daily volatility
+        const basePrice = Math.random() * 100 + 100; // Random start price 100-200
+        const priceHistory = generateStockData(basePrice, 252, volatility); // 1 year of trading days
+        
+        const currentPrice = priceHistory[priceHistory.length - 1];
+        const highPrice = Math.max(...priceHistory);
+        const lowPrice = Math.min(...priceHistory);
+        
+        // Update Stats UI
+        document.getElementById('currentPrice').innerText = "$" + currentPrice.toFixed(2);
+        document.getElementById('highPrice').innerText = "$" + highPrice.toFixed(2);
+        document.getElementById('lowPrice').innerText = "$" + lowPrice.toFixed(2);
+        document.getElementById('volatility').innerText = "High";
+
+        // Calculate Levels
+        const fibLevels = calculateFibLevels(highPrice, lowPrice);
+        renderFibTable(fibLevels, currentPrice);
+        determineSignal(currentPrice, fibLevels);
+        
+        // Render Chart
+        updateChart(priceHistory, fibLevels);
+    }
+
+    // --- 4. Signal Logic ---
+    function determineSignal(price, levels) {
+        const signalCard = document.getElementById('signalCard');
+        const signalText = document.getElementById('signalText');
+        const signalIcon = document.getElementById('signalIcon');
+        const signalReason = document.getElementById('signalReason');
+        
+        // Reset classes
+        signalCard.classList.remove('border-t-emerald-500', 'border-t-rose-500', 'border-t-yellow-500', 'border-t-slate-600');
+        signalText.classList.remove('text-emerald-400', 'text-rose-400', 'text-yellow-400', 'text-white');
+        
+        // Logic
+        // SELL if > 78.6% (Overextended / Approaching High)
+        if (price >= levels['78.6%']) {
+            signalCard.classList.add('border-t-rose-500', 'bg-rose-900/10');
+            signalText.innerText = "SELL";
+            signalText.classList.add('text-rose-400', 'signal-pulse');
+            signalIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-down text-rose-500"></i>';
+            signalReason.innerHTML = `Price ($${price.toFixed(2)}) is in the <strong>premium zone</strong> (>78.6%). <br>Mean reversion probability is high. Target: $${levels['50.0%'].toFixed(2)}.`;
+        } 
+        // BUY if < 23.6% (Oversold / Approaching Low)
+        else if (price <= levels['23.6%']) {
+            signalCard.classList.add('border-t-emerald-500', 'bg-emerald-900/10');
+            signalText.innerText = "BUY";
+            signalText.classList.add('text-emerald-400', 'signal-pulse');
+            signalIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-up text-emerald-500"></i>';
+            signalReason.innerHTML = `Price ($${price.toFixed(2)}) is in the <strong>discount zone</strong> (<23.6%). <br>Risk/Reward favors longs. Target: $${levels['50.0%'].toFixed(2)}.`;
+        } 
+        // HOLD/NEUTRAL
+        else {
+            signalCard.classList.add('border-t-yellow-500');
+            signalText.innerText = "HOLD";
+            signalText.classList.add('text-yellow-400');
+            signalIcon.innerHTML = '<i class="fa-solid fa-scale-balanced text-yellow-500"></i>';
+            
+            let zone = "Neutral";
+            if(price > levels['50.0%']) zone = "Bullish Confirmation (>50%)";
+            else zone = "Bearish Confirmation (<50%)";
+
+            signalReason.innerText = `Price is within the equilibrium range. Current bias: ${zone}. Wait for extremes to execute mean reversion.`;
+        }
+    }
+
+    // --- 5. UI Rendering Helpers ---
+    function renderFibTable(levels, currentPrice) {
+        const tbody = document.getElementById('fibTableBody');
+        tbody.innerHTML = '';
+        
+        // Order: High to Low
+        const keys = ['100.0%', '78.6%', '61.8%', '50.0%', '38.2%', '23.6%', '0.0%'];
+        
+        keys.forEach(key => {
+            const levelPrice = levels[key];
+            const isNear = Math.abs(currentPrice - levelPrice) / currentPrice < 0.01; // Within 1%
+            
+            let rowClass = 'hover:bg-slate-700/30 transition-colors';
+            let priceClass = 'font-mono text-slate-300';
+            
+            // Highlight active zones
+            if (key === '50.0%') priceClass = 'font-mono text-blue-400 font-bold';
+            if (key === '61.8%') priceClass = 'font-mono text-yellow-400 font-bold'; // Golden Pocket
+
+            if (isNear) rowClass += ' bg-blue-900/20 border-l-2 border-blue-500';
+
+            const row = `
+                <tr class="${rowClass}">
+                    <td class="px-6 py-3 font-medium text-slate-400">${key}</td>
+                    <td class="px-6 py-3 ${priceClass}">$${levelPrice.toFixed(2)}</td>
+                    <td class="px-6 py-3 text-right text-xs text-slate-500 uppercase tracking-wider">
+                        ${getLabelForLevel(key)}
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function getLabelForLevel(key) {
+        if(key === '100.0%') return 'Resistance (High)';
+        if(key === '78.6%') return 'Sell Zone';
+        if(key === '61.8%') return 'Golden Pocket';
+        if(key === '50.0%') return 'Mean / Pivot';
+        if(key === '23.6%') return 'Buy Zone';
+        if(key === '0.0%') return 'Support (Low)';
+        return 'Consolidation';
+    }
+
+    // --- 6. Chart.js Config ---
+    function updateChart(dataPoints, levels) {
+        const ctx = document.getElementById('strategyChart').getContext('2d');
+        
+        if(myChart) myChart.destroy();
+
+        // Create labels (Day 1 to N)
+        const labels = dataPoints.map((_, i) => i);
+
+        // Gradient for price line
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+        // Annotation Lines (Fib Levels)
+        const annotations = {};
+        // We implement simple horizontal lines using dataset "fill" trick or plugins. 
+        // For simplicity in this single file without plugins, we will map arrays of constant values.
+        
+        const makeLine = (val, color, dash) => Array(dataPoints.length).fill(val);
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Price',
+                        data: dataPoints,
+                        borderColor: '#60a5fa', // Blue-400
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Mean (50%)',
+                        data: makeLine(levels['50.0%'], '', []),
+                        borderColor: '#94a3b8', // Slate-400
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: 'Sell Zone (78.6%)',
+                        data: makeLine(levels['78.6%'], '', []),
+                        borderColor: '#fb7185', // Rose-400
+                        borderWidth: 1,
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: 'Buy Zone (23.6%)',
+                        data: makeLine(levels['23.6%'], '', []),
+                        borderColor: '#34d399', // Emerald-400
+                        borderWidth: 1,
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#94a3b8' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: '#e2e8f0',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ": $" + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: false
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#64748b'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Initialize on load
+    window.onload = analyzeStock;
+
+</script>
+</body>
+</html>
